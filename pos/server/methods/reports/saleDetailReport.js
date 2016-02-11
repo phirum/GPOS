@@ -1,5 +1,8 @@
 Meteor.methods({
     posSaleDetailReport: function (arg) {
+        if (! Meteor.userId()) {
+            throw new Meteor.Error("not-authorized");
+        }
         var data = {
             title: {},
             header: {},
@@ -116,7 +119,6 @@ function getSaleProducts(params, categoryId) {
         var product = Pos.Collection.Products.findOne(r.productId);
         grandTotal += r.amount;
         granTotalCost += r.totalCost;
-        console.log(r.amount);
         var unit = Pos.Collection.Units.findOne(product.unitId).name;
         arr.push({
             order: i,

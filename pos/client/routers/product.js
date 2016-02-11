@@ -1,29 +1,29 @@
 /*Router.route('pos/product', function () {
-    this.render('pos_product');
+ this.render('pos_product');
 
-}, {
-    name: 'pos.product',
-    header: {title: 'product', sub: '', icon: 'list-alt'},
-    waitOn: function () {
-        return Meteor.subscribe('posProduct');
-    },
-    title:'pos-product'
-});*/
-
+ }, {
+ name: 'pos.product',
+ header: {title: 'product', sub: '', icon: 'list-alt'},
+ waitOn: function () {
+ return Meteor.subscribe('posProduct');
+ },
+ title:'pos-product'
+ });*/
 
 
 var subs = new SubsManager();
 posRoutes.route('/product', {
     name: 'pos.product',
     subscriptions: function (params, queryParams) {
-       this.register(
+        this.register(
             'pos_image',
             Meteor.subscribe('images')
         );
-        this.register(
-            'pos_product',
-            Meteor.subscribe('posProduct')
-        );
+        /*
+         this.register(
+         'pos_product',
+         Meteor.subscribe('posProduct')
+         );*/
         this.register(
             'pos_category',
             Meteor.subscribe('posCategory')

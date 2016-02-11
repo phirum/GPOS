@@ -18,13 +18,13 @@ posRoutes.route('/saleList', {
     name: 'pos.saleList',
     subscriptions: function (params, queryParams) {
         this.register(
-            'pos_sale',
-            Meteor.subscribe('posSale',{branchId:Session.get('currentBranch')})
+            'pos_userStaff',
+            Meteor.subscribe('posUserStaff', {branchId: Session.get('currentBranch')})
         );
-        this.register(
+         /* this.register(
             'pos_saleDetail',
             Meteor.subscribe('posSaleDetail',{branchId:Session.get('currentBranch')})
-        );
+        );*/
     },
     action: function (params, queryParams) {
         Layout.main('pos_saleList');

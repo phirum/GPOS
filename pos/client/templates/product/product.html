@@ -80,12 +80,12 @@
                         <span class="help-block">{{afFieldMessage name='UnitId'}}</span>
                     {{/if}}
                 </div>
+                {{> afQuickField name='description'}}
                 {{> afQuickField name='barcode'}}
                 {{> afQuickField name="picture"}}
             </div>
         </div>
         <button type="submit" class="btn btn-primary">Save</button>
-
         <button type="reset" class="btn btn-default">Reset</button>
     {{/autoForm}}
 </template>
@@ -168,6 +168,7 @@
                         <span class="help-block">{{afFieldMessage name='UnitId'}}</span>
                     {{/if}}
                 </div>
+                {{> afQuickField name='description'}}
                 {{> afQuickField name='barcode'}}
                 {{> afQuickField name="picture"}}
             </div>

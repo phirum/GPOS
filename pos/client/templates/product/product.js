@@ -13,41 +13,42 @@ posProductTPL.events({
         alertify.product(fa("plus", "Add New Product"), renderTemplate(posProductInsertTPL)).maximize();
     },
     'click .update': function (e, t) {
-        Session.set('CategoryIdSession', null);
-        var data = Pos.Collection.Products.findOne(this._id);
-        alertify.product(fa('pencil', 'Update Existing Product'), renderTemplate(posProductUpdateTPL, data)).maximize();
+        Meteor.call('findOneRecord', 'Pos.Collection.Products', {_id: this._id}, {}, function (error, product) {
+            Session.set('CategoryIdSession', null);
+            alertify.product(fa('pencil', 'Update Existing Product'), renderTemplate(posProductUpdateTPL, product)).maximize();
+        });
     },
     'click .remove': function (e, t) {
         var id = this._id;
-        var canRemove = (this._purchaseDetailCount == null || this._purchaseDetailCount == 0)
-            && (this._saleDetailCount == null || this._saleDetailCount == 0)
-            && (this._adjustmentDetailCount == null || this._adjustmentDetailCount == 0);
         alertify.confirm("Are you sure to delete [" + id + "]?")
             .set({
                 onok: function (closeEvent) {
-                    /*var relation = relationExist(
-                     [
-                     {collection: Pos.Collection.SaleDetails, selector: {productId: id}},
-                     {collection: Pos.Collection.PurchaseDetails, selector: {productId: id}},
-                     {collection: Pos.Collection.Stocks, selector: {productId: id}},
-                     {collection: Pos.Collection.AdjustmentDetails, selector: {productId: id}}
-                     ]
-                     );*/
-                    if (canRemove) {
-                        Pos.Collection.Products.remove(id, function (error) {
-                            if (error) {
-                                alertify.error(error.message);
+                    var arr = [
+                        {collection: 'Pos.Collection.FIFOInventory', selector: {productId: id}},
+                        {collection: 'Pos.Collection.SaleDetails', selector: {productId: id}},
+                        {collection: 'Pos.Collection.PurchaseDetails', selector: {productId: id}},
+                        {collection: 'Pos.Collection.LocationTransferDetails', selector: {productId: id}}
+                    ];
+                    Meteor.call('isRelationExist', arr, function (error, result) {
+                        if (error) {
+                            alertify.error(error.message);
+                        } else {
+                            if (result) {
+                                alertify.warning("Data has been used. Can't remove.");
                             } else {
-                                alertify.success("Success");
+                                Pos.Collection.Products.remove(id, function (err) {
+                                    if (err) {
+                                        alertify.error(err.message);
+                                    } else {
+                                        alertify.success("Success");
+                                    }
+                                });
                             }
-                        });
-                    } else {
-                        alertify.warning("Data has been used. Can't remove.");
-                    }
+                        }
+                    });
                 },
                 title: '<i class="fa fa-remove"></i> Delete Product'
             });
-
     },
     'click .show': function (e, t) {
         alertify.productShow(fa('eye', 'Product Detail'), renderTemplate(posProductShowTPL, this));

@@ -175,24 +175,39 @@ function subtractImeiArray(src, filt) {
  */
 Meteor.methods({
     insertStock: function (obj) {
+        if (!Meteor.userId()) {
+            throw new Meteor.Error("not-authorized");
+        }
         Pos.Collection.Stocks.insert(obj);
     },
     directInsertStock: function (obj) {
+        if (!Meteor.userId()) {
+            throw new Meteor.Error("not-authorized");
+        }
         Pos.Collection.Stocks.direct.insert(obj);
     },
     updateStock: function (id, set, unset) {
+        if (!Meteor.userId()) {
+            throw new Meteor.Error("not-authorized");
+        }
         var updateObject = {};
         if (set != null) updateObject.$set = set;
         if (unset != null) updateObject.$unset = unset;
         Pos.Collection.Stocks.update(id, updateObject);
     },
     directUpdateStock: function (id, set, unset) {
+        if (!Meteor.userId()) {
+            throw new Meteor.Error("not-authorized");
+        }
         var updateObject = {};
         if (set != null) updateObject.$set = set;
         if (unset != null) updateObject.$unset = unset;
         Pos.Collection.Stocks.direct.update(id, updateObject);
     },
     insertStockHistory: function (branchId) {
+        if (!Meteor.userId()) {
+            throw new Meteor.Error("not-authorized");
+        }
         var products = Pos.Collection.Products.find({productType: "Stock"});
         //var branches = Cpanel.Collection.Branch.find();
         var today = moment(new Date).format('YYYYMMDD');
@@ -226,6 +241,9 @@ Meteor.methods({
         //return stockList;
     },
     purchaseManageStock: function (purchaseId, branchId) {
+        if (!Meteor.userId()) {
+            throw new Meteor.Error("not-authorized");
+        }
         Meteor.defer(function () {
             //---Open Inventory type block "FIFO Inventory"---
             var purchaseDetails = Pos.Collection.PurchaseDetails.find({purchaseId: purchaseId});
@@ -238,9 +256,13 @@ Meteor.methods({
                 fifoInventoryInsert(branchId, pd, prefix);
             });
             //--- End Inventory type block "FIFO Inventory"---
+            Pos.Collection.PurchaseDetails.direct.update({purchaseId: purchaseId}, {$set: {status: "Saved"}}, {multi: true});
         });
     },
     saleManageStock: function (saleId, branchId) {
+        if (!Meteor.userId()) {
+            throw new Meteor.Error("not-authorized");
+        }
         Meteor.defer(function () {
             //---Open Inventory type block "FIFO Inventory"---
             var saleTotalCost = 0;
@@ -289,6 +311,7 @@ Meteor.methods({
                     var setObj = {};
                     setObj.transaction = transaction;
                     setObj.totalCost = 0;
+                    setObj.status = "Saved";
                     if (transaction.count() > 0) {
                         transaction.forEach(function (t) {
                             setObj.totalCost += parseFloat(t.price) * parseFloat(t.quantity);
@@ -310,6 +333,9 @@ Meteor.methods({
         });
     },
     locationTransferManageStock: function (locationTransferId, branchId) {
+        if (!Meteor.userId()) {
+            throw new Meteor.Error("not-authorized");
+        }
         Meteor.defer(function () {
             //---Open Inventory type block "FIFO Inventory"---
             var locationTransferTotalCost = 0;
@@ -345,14 +371,14 @@ Meteor.methods({
                         }
                         //if (enoughQuantity != 0) {
                         if (quantityOfThisPrice > 0) {
-                            transaction.push({quantity: quantityOfThisPrice, price: inventories[i].price})
+                            transaction.push({quantity: quantityOfThisPrice, price: inventories[i].price});
                             // transaction.push({quantity: quantityOfThisPrice, price: inventories[i].price})
                             var purchaseDetailObj = {};
                             purchaseDetailObj.locationId = ltd.toLocationId;
                             purchaseDetailObj.productId = ltd.productId;
                             purchaseDetailObj.quantity = quantityOfThisPrice;
                             purchaseDetailObj.price = inventories[i].price;
-                            purchaseDetailObj.imei=ltd.imei;
+                            purchaseDetailObj.imei = ltd.imei;
                             fifoInventoryInsert(branchId, purchaseDetailObj, prefix);
                         }
                         //}
@@ -365,6 +391,7 @@ Meteor.methods({
                     }
                     var setObj = {};
                     setObj.transaction = transaction;
+                    setObj.status = "Saved";
                     Pos.Collection.LocationTransferDetails.direct.update(
                         ltd._id,
                         {$set: setObj}
@@ -376,6 +403,9 @@ Meteor.methods({
         });
     },
     returnToInventory: function (saleId, branchId) {
+        if (!Meteor.userId()) {
+            throw new Meteor.Error("not-authorized");
+        }
         Meteor.defer(function () {
             //---Open Inventory type block "FIFO Inventory"---
             var saleDetails = Pos.Collection.SaleDetails.find({saleId: saleId});
@@ -426,6 +456,5 @@ Meteor.methods({
             //--- End Inventory type block "FIFO Inventory"---
         });
     }
-})
-;
+});
 

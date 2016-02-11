@@ -1,5 +1,8 @@
 Meteor.methods({
     posPurchaseReport: function (arg) {
+        if (!Meteor.userId()) {
+            throw new Meteor.Error("not-authorized");
+        }
         var data = {
             title: {},
             header: {},
@@ -56,6 +59,8 @@ Meteor.methods({
 
         var purchase = Pos.Collection.Purchases.find(params);
         var content = calculatePurchaseHelper(purchase);
+        data.grandTotalPaid = content.grandTotalPaid;
+        data.grandTotalOwed = content.grandTotalOwed;
         data.grandTotal = content.grandTotal;
         data.grandTotalConvert = content.grandTotalConvert;
 
@@ -67,6 +72,7 @@ Meteor.methods({
 });
 
 function calculatePurchaseHelper(pur) {
+    var grandTotalOwed = 0;
     var grandTotal = 0;
     var grandTotalConvert = {};
     var purchaseList = [];
@@ -75,26 +81,38 @@ function calculatePurchaseHelper(pur) {
         grandTotal += p.total;
         p.order = i;
         p.exchangeRates = [];
-        Pos.Collection.ExchangeRates.findOne(p.exchangeRateId).rates.
-        forEach(function (ex) {
+        Pos.Collection.ExchangeRates.findOne(p.exchangeRateId).rates.forEach(function (ex) {
             ex.exTotal = p.total * ex.rate;
             if (grandTotalConvert[ex.toCurrencyId] == null) {
                 grandTotalConvert[ex.toCurrencyId] = 0
             }
             grandTotalConvert[ex.toCurrencyId] += ex.exTotal;
+            ex.exTotal=numeral(ex.exTotal).format('0,0.00');
             p.exchangeRates.push(ex);
         });
         p.purchaseDate = moment(p.purchaseDate).format("DD-MM-YY, HH:mm");
+        p.owedAmount = p.owedAmount ? p.owedAmount : 0;
+        p.paidAmount = p.total - p.owedAmount;
+        grandTotalOwed += p.owedAmount;
+        p.paidAmount = numeral(p.paidAmount).format('0,0.00');
+        p.owedAmount = numeral(p.owedAmount).format('0,0.00');
         p.total = numeral(p.total).format('0,0.00');
-        p.supplier = Pos.Collection.Suppliers.findOne(p.supplierId).name;
-        p.staff = Pos.Collection.Staffs.findOne(p.staffId).name;
+        p.supplier = p._supplier.name;
+        p.staff = p._staff.name;
+        // p.supplier = Pos.Collection.Suppliers.findOne(p.supplierId).name;
+        // p.staff = Pos.Collection.Staffs.findOne(p.staffId).name;
         i++;
         purchaseList.push(p);
     });
+    purchaseList.grandTotalPaid = numeral(grandTotal-grandTotalOwed).format('0,0.00');
+    purchaseList.grandTotalOwed = numeral(grandTotalOwed).format('0,0.00');
     purchaseList.grandTotal = numeral(grandTotal).format('0,0.00');
     purchaseList.grandTotalConvert = [];
     for (var key in grandTotalConvert) {
-        purchaseList.grandTotalConvert.push({toCurrencyId: key, totalConvert: grandTotalConvert[key]});
+        purchaseList.grandTotalConvert.push({
+            toCurrencyId: key,
+            totalConvert: numeral(grandTotalConvert[key]).format('0,0.00')
+        });
     }
 
     return purchaseList;

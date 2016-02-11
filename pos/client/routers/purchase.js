@@ -37,13 +37,17 @@ posRoutes.route('/purchaseList', {
     name: 'pos.purchaseList',
     subscriptions: function (params, queryParams) {
         this.register(
-            'pos_purchase',
-            subs.subscribe('posPurchase')
+            'pos_userStaff',
+            Meteor.subscribe('posUserStaff', {branchId: Session.get('currentBranch')})
         );
-        this.register(
-            'pos_purchaseDetail',
-            subs.subscribe('posPurchaseDetail')
-        );
+        /*this.register(
+         'pos_purchase',
+         subs.subscribe('posPurchase')
+         );
+         this.register(
+         'pos_purchaseDetail',
+         subs.subscribe('posPurchaseDetail')
+         );*/
     },
     action: function (params, queryParams) {
         Layout.main('pos_purchaseList');
@@ -60,30 +64,26 @@ var subs = new SubsManager();
 posRoutes.route('/purchase/:purchaseId?', {
     name: 'pos.purchase',
     subscriptions: function (params, queryParams) {
-        var branchId=Session.get('currentBranch');
+        var branchId = Session.get('currentBranch');
         this.register(
             'pos_location',
-            Meteor.subscribe('posLocation',{branchId:branchId})
+            Meteor.subscribe('posLocation', {branchId: branchId})
         );
         this.register(
             'pos_purchase',
-            Meteor.subscribe('posPurchase',{branchId:branchId})
+            Meteor.subscribe('posPurchase', {branchId: branchId, status: "Unsaved"})
         );
         this.register(
             'pos_purchaseDetail',
-            Meteor.subscribe('posPurchaseDetail',{branchId:branchId})
-        );
-        this.register(
-            'pos_product',
-            Meteor.subscribe('posProduct')
+            Meteor.subscribe('posPurchaseDetail', {branchId: branchId, status: "Unsaved"})
         );
         this.register(
             'pos_staff',
-            Meteor.subscribe('posStaff',{branchId:branchId})
+            Meteor.subscribe('posStaff', {branchId: branchId})
         );
         this.register(
             'pos_userStaff',
-            Meteor.subscribe('posUserStaff',{branchId:branchId})
+            Meteor.subscribe('posUserStaff', {branchId: branchId})
         );
         this.register(
             'pos_unit',
@@ -91,15 +91,11 @@ posRoutes.route('/purchase/:purchaseId?', {
         );
         this.register(
             'pos_supplier',
-            Meteor.subscribe('posSupplier',{branchId:branchId})
+            Meteor.subscribe('posSupplier', {branchId: branchId})
         );
         this.register(
             'pos_exchangeRate',
-            Meteor.subscribe('posExchangeRate',{branchId:branchId})
-        );
-        this.register(
-            'pos_stock',
-            Meteor.subscribe('posStock',{branchId:branchId})
+            Meteor.subscribe('posExchangeRate', {branchId: branchId})
         );
     },
     action: function (params, queryParams) {
@@ -116,50 +112,14 @@ posRoutes.route('/purchase/:purchaseId?', {
 posRoutes.route('/purchase/print/:purchaseId', {
     name: 'pos.printPurchase',
     subscriptions: function (params, queryParams) {
-        var branchId=Session.get('currentBranch');
-        this.register(
-            'pos_purchase',
-            subs.subscribe('posPurchase',{branchId:branchId})
-        );
-        this.register(
-            'pos_purchaseDetail',
-            subs.subscribe('posPurchaseDetail',{branchId:branchId})
-        );
-        this.register(
-            'pos_product',
-            subs.subscribe('posProduct')
-        );
-        this.register(
-            'pos_staff',
-            subs.subscribe('posStaff',{branchId:branchId})
-        );
-        this.register(
-            'pos_userStaff',
-            subs.subscribe('posUserStaff')
-        );
-        this.register(
-            'pos_unit',
-            subs.subscribe('posUnit')
-        );
-        this.register(
-            'pos_supplier',
-            subs.subscribe('posSupplier',{branchId:branchId})
-        );
-        this.register(
-            'pos_exchangeRate',
-            subs.subscribe('posExchangeRate',{branchId:branchId})
-        );
-        this.register(
-            'cpanel_company',
-            subs.subscribe('cpanel_company')
-        );
-        this.register(
-            'cpanel_payment',
-            subs.subscribe('posPayment',{branchId:branchId})
-        );
+        var branchId = Session.get('currentBranch');
+        /* this.register(
+         'pos_exchangeRate',
+         subs.subscribe('posExchangeRate', {branchId: branchId})
+         );*/
     },
     action: function (params, queryParams) {
-        Layout.render('printLayout','pos_printPurchase');
+        Layout.render('printLayout', 'pos_printPurchase');
     },
     breadcrumb: {
         //params: ['id'],

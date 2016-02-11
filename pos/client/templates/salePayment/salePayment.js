@@ -4,63 +4,117 @@ var posSalePaymentUpdateTPL = Template.pos_salePaymentUpdate;
 var posSalePaymentShowTPL = Template.pos_salePaymentShow;
 
 posSalePaymentTPL.onRendered(function () {
+    Session.set('salePaymentSelectorSession', null);
+    DateTimePicker.dateRange($('#sale-payment-date-filter'));
     createNewAlertify(['salePayment', 'salePaymentShow']);
 });
 posSalePaymentTPL.helpers({
     selector: function () {
-        var selector = {};
-        selector.purchaseId = null;
-        selector.branchId = Session.get('currentBranch');
-        return selector;
+        var selectorSession = Session.get('salePaymentSelectorSession');
+        if (selectorSession) {
+            return selectorSession;
+        } else {
+            var selector = {branchId: Session.get('currentBranch')};
+            var today = moment().format('YYYY-MM-DD');
+            var fromDate = moment(today + " 00:00:00", "YYYY-MM-DD HH:mm:ss").toDate();
+            var toDate = moment(today + " 23:59:59", "YYYY-MM-DD HH:mm:ss").toDate();
+            selector.paymentDate = {$gte: fromDate, $lte: toDate};
+            return selector;
+        }
     }
 });
 posSalePaymentTPL.events({
+    'change #sale-payment-date-filter': function () {
+        setSalePaymentSelectorSession();
+    },
+    'change #sale-payment-status-filter': function () {
+        setSalePaymentSelectorSession();
+    },
     'click .insert': function (e, t) {
         alertify.salePayment(fa('plus', 'Add New Payment'), renderTemplate(posSalePaymentInsertTPL)).maximize();
     },
     'click .update': function (e, t) {
-        var data = Pos.Collection.Payments.findOne(this._id);
-        Session.set('paymentObj', data);
-        var payment = Pos.Collection.Payments.findOne({
-                saleId: data.saleId,
-                branchId: Session.get('currentBranch')
-            },
-            {
-                sort: {_id: -1, paymentDate: -1}
-
-            });
-        if (data._id == payment._id && data.status != "firstPay") {
-            alertify.salePayment(fa('pencil', 'Update Existing Payment'), renderTemplate(posSalePaymentUpdateTPL, data)).maximize()
-        } else {
-            alertify.warning("This payment not the last one");
-        }
+        var id = this._id;
+        Meteor.call('findOneRecord', 'Pos.Collection.Payments', {_id: id}, {}, function (error, payment) {
+            if (payment) {
+                Session.set('paymentObj', payment);
+                Meteor.call('findOneRecord', 'Pos.Collection.Payments', {
+                    saleId: payment.saleId,
+                    branchId: Session.get('currentBranch')
+                }, {sort: {_id: -1, paymentDate: -1}}, function (err, lastPayment) {
+                    if (payment._id == lastPayment._id) {
+                        alertify.salePayment(fa('pencil', 'Update Existing Payment'), renderTemplate(posSalePaymentUpdateTPL, payment)).maximize()
+                    } else {
+                        alertify.warning("This payment not the last one");
+                    }
+                });
+            } else {
+                alertify.error(error.message);
+            }
+        });
     },
     'click .remove': function (e, t) {
         var id = this._id;
-        var data = Pos.Collection.Payments.findOne(id);
-        var payment = Pos.Collection.Payments.findOne({
-                saleId: data.saleId,
-                branchId: Session.get('currentBranch')
-            },
-            {sort: {_id: -1, paymentDate: -1}}
-        );
-        if (data._id == payment._id && data.status != "firstPay") {
-            alertify.confirm("Are you sure to delete [" + id + "]?")
-                .set({
-                    onok: function (closeEvent) {
-                        Pos.Collection.Payments.remove(id, function (error) {
-                            if (error) {
-                                alertify.error(error.message);
-                            } else {
-                                alertify.success("Success");
-                            }
-                        });
-                    },
-                    title: '<i class="fa fa-remove"></i> Delete Payment'
+        Meteor.call('findOneRecord', 'Pos.Collection.Payments', {_id: id}, {}, function (error, payment) {
+            if (payment) {
+                Meteor.call('findOneRecord', 'Pos.Collection.Payments', {
+                    saleId: payment.saleId,
+                    branchId: Session.get('currentBranch')
+                }, {sort: {_id: -1, paymentDate: -1}}, function (err, lastPayment) {
+                    if (lastPayment) {
+                        if (payment._id == lastPayment._id) {
+                            alertify.confirm("Are you sure to delete [" + id + "]?")
+                                .set({
+                                    onok: function (closeEvent) {
+                                        Pos.Collection.Payments.remove(id, function (e) {
+                                            if (e) {
+                                                alertify.error(e.message);
+                                            } else {
+                                                alertify.success("Success");
+                                            }
+                                        });
+                                    },
+                                    title: '<i class="fa fa-remove"></i> Delete Payment'
+                                });
+                        } else {
+                            alertify.warning("This payment not the last one");
+                        }
+                    } else {
+                        alertify.error(err.message);
+                    }
                 });
-        } else {
-            alertify.warning("This payment not the last one");
-        }
+            }
+            else {
+                alertify.error(error.message);
+            }
+        });
+
+
+        /*
+         var data = Pos.Collection.Payments.findOne(id);
+         var payment = Pos.Collection.Payments.findOne({
+         saleId: data.saleId,
+         branchId: Session.get('currentBranch')
+         },
+         {sort: {_id: -1, paymentDate: -1}}
+         );
+         if (data._id == payment._id && data.status != "firstPay") {
+         alertify.confirm("Are you sure to delete [" + id + "]?")
+         .set({
+         onok: function (closeEvent) {
+         Pos.Collection.Payments.remove(id, function (error) {
+         if (error) {
+         alertify.error(error.message);
+         } else {
+         alertify.success("Success");
+         }
+         });
+         },
+         title: '<i class="fa fa-remove"></i> Delete Payment'
+         });
+         } else {
+         alertify.warning("This payment not the last one");
+         }*/
 
     },
     'click .show': function (e, t) {
@@ -68,9 +122,36 @@ posSalePaymentTPL.events({
     }
 });
 posSalePaymentInsertTPL.onRendered(function () {
+    Session.set("posSalePaymentDate", null);
     datePicker();
 });
 posSalePaymentInsertTPL.helpers({
+    customerList: function () {
+
+        var branchIdSession = Session.get('currentBranch');
+        var selector = {};
+        if (branchIdSession != null) selector.branchId = branchIdSession;
+        return ReactiveMethod.call('getCustomerList', selector);
+    },
+    paymentDate: function () {
+        //var sale = Pos.Collection.Sales.findOne(FlowRouter.getParam('saleId'));
+        var paymentDateSession = Session.get('posSalePaymentDate');
+        if (paymentDateSession) {
+            return paymentDateSession;
+            //return moment(paymentDateSession).format('YYYY-MM-DD HH:mm:ss');
+        } else {
+            return moment(TimeSync.serverTime(null)).format('YYYY-MM-DD HH:mm:ss');
+        }
+    },
+    saleList: function () {
+        var customerSession = Session.get('customerId');
+        var branchIdSession = Session.get('currentBranch');
+        var selector = {};
+        selector.status = "Owed";
+        if (branchIdSession != null) selector.branchId = branchIdSession;
+        if (customerSession != null) selector.customerId = customerSession;
+        return ReactiveMethod.call('getSaleListForPayment', selector);
+    },
     dueAmount: function () {
         var dueAmount = Session.get('dueAmount');
         return dueAmount == null ? 0 : dueAmount;
@@ -102,6 +183,10 @@ posSalePaymentInsertTPL.helpers({
     }
 });
 posSalePaymentInsertTPL.events({
+    'blur #paymentDate': function (e) {
+        var paymentDate = $(e.currentTarget).val();
+        Session.set("posSalePaymentDate", paymentDate);
+    },
     'click #save-payment': function () {
         var saleId = $('select[name="saleId"]').val();
         var paymentDate = $('[name="paymentDate"]').val();
@@ -117,23 +202,27 @@ posSalePaymentInsertTPL.events({
             alertify.error('Please input all requirement input.');
             return;
         }
-        var payment = Pos.Collection.Payments.findOne({
-                saleId: saleId,
-                branchId: Session.get('currentBranch')
-                //balanceAmount: {$gt: 0}
-            },
-            {
-                sort: {_id: -1, paymentDate: -1}
+        Meteor.call('findOneRecord', 'Pos.Collection.Payments', {
+            saleId: saleId,
+            branchId: Session.get('currentBranch')
+        }, {sort: {_id: -1, paymentDate: -1}}, function (error, payment) {
+            if (error) {
+                alertify.error(error.message);
+            } else {
+                if (payment) {
+                    paymentDate = moment(paymentDate).toDate();
+                    if (paymentDate < payment.paymentDate) {
+                        alertify.alert("Payment date can't less than the Last payment date.");
+                    } else {
+                        pay(saleId);
+                    }
+                } else {
+                    pay(saleId);
+                }
             }
-        );
-        if (payment != null) {
-            paymentDate = moment(paymentDate).toDate();
-            if (paymentDate < payment.paymentDate) {
-                alertify.alert("Payment date can't less than the Last payment date.");
-                return;
-            }
-        }
-        pay(saleId);
+
+        });
+
     },
     'mouseleave .pay-amount': function (e) {
         var value = $(e.currentTarget).val();
@@ -166,24 +255,31 @@ posSalePaymentInsertTPL.events({
         if (saleId == "") {
             Session.set('dueAmount', 0);
         }
-        var payment = Pos.Collection.Payments.findOne({
-                saleId: saleId,
-                branchId: Session.get('currentBranch')
-                //balanceAmount: {$gt: 0}
-            },
-            {
-                sort: {_id: -1, paymentDate: -1}
+        Meteor.call('findOneRecord', 'Pos.Collection.Payments', {
+            saleId: saleId,
+            branchId: Session.get('currentBranch')
+        }, {sort: {_id: -1, paymentDate: -1}}, function (error, payment) {
+            if (error) {
+                alertify.error(error.message);
+            } else {
+                if (payment == null) {
+                    Meteor.call('findOneRecord', 'Pos.Collection.Sales', {
+                        _id: saleId
+                    }, {}, function (err, sale) {
+                        if (sale) {
+                            Session.set('dueAmount', sale.total);
+                        } else {
+                            Session.set('dueAmount', null);
+                        }
+                    });
+                } else if (payment.balanceAmount <= 0) {
+                    alertify.alert('Paid');
+                    Session.set('dueAmount', null);
+                } else {
+                    Session.set('dueAmount', payment.balanceAmount);
+                }
             }
-        );
-        if (payment == null) {
-            var sale = Pos.Collection.Sales.findOne(saleId);
-            Session.set('dueAmount', sale.total);
-        } else if (payment.balanceAmount <= 0) {
-            alertify.alert('Paid');
-            Session.set('dueAmount', null);
-        } else {
-            Session.set('dueAmount', payment.balanceAmount);
-        }
+        });
     }
 });
 posSalePaymentUpdateTPL.helpers({
@@ -274,25 +370,27 @@ posSalePaymentUpdateTPL.events({
     'change select[name="saleId"]': function (e) {
         var saleId = $(e.currentTarget).val();
         clearFormData();
-        var payment = Pos.Collection.Payments.findOne({
-                saleId: saleId,
-                branchId: Session.get('currentBranch')
-                //balanceAmount: {$gt: 0}
-            },
-            {
-                sort: {_id: -1, paymentDate: -1}
+        Meteor.call('findOneRecord', 'Pos.Collection.Payments', {
+            saleId: saleId,
+            branchId: Session.get('currentBranch')
+        }, {sort: {_id: -1, paymentDate: -1}}, function (error, payment) {
+            if (payment) {
+                if (payment.balanceAmount <= 0) {
+                    alertify.alert('DueAmount <=0 : ' + payment.balanceAmount);
+                    Session.set('updatedDueAmount', null);
+                } else {
+                    Session.set('updatedDueAmount', payment.balanceAmount);
+                }
             }
-        );
-        if (payment == null) {
-            return false;
-        } else if (payment.balanceAmount <= 0) {
-            alertify.alert('DueAmount <=0 : ' + payment.balanceAmount);
-            Session.set('updatedDueAmount', null);
-        } else {
-            Session.set('updatedDueAmount', payment.balanceAmount);
-        }
+            else {
+                Session.set('updatedDueAmount', null);
+                alertify.error(error.message);
+            }
+        });
+
     }
-});
+})
+;
 AutoForm.hooks({
     pos_salePaymentInsert: {
         onSuccess: function (formType, result) {
@@ -377,7 +475,6 @@ function pay(saleId) {
         );
     });
     var baseCurrencyId = Cpanel.Collection.Setting.findOne().baseCurrency;
-    obj._id = idGenerator.genWithPrefix(Pos.Collection.Payments, saleId, 3);
     obj.paymentDate = moment($('[name="paymentDate"]').val()).toDate();
     obj.saleId = saleId;
     //obj.status = "firstPay";
@@ -468,4 +565,25 @@ function calculateUpdatePayment() {
             $('.return-amount').val(numeral(0).format('0,0.00'));
         }
     }
+}
+
+function setSalePaymentSelectorSession() {
+    var selector = {branchId: Session.get('currentBranch')};
+    var dateRange = $('#sale-payment-date-filter').val();
+    var status = $('#sale-payment-status-filter').val();
+    if (dateRange != "") {
+        var date = dateRange.split(" To ");
+        var fromDate = moment(date[0] + " 00:00:00", "YYYY-MM-DD HH:mm:ss").toDate();
+        var toDate = moment(date[1] + " 23:59:59", "YYYY-MM-DD HH:mm:ss").toDate();
+        selector.paymentDate = {$gte: fromDate, $lte: toDate};
+    } else {
+        var today = moment().format('YYYY-MM-DD');
+        var fromDate = moment(today + " 00:00:00", "YYYY-MM-DD HH:mm:ss").toDate();
+        var toDate = moment(today + " 23:59:59", "YYYY-MM-DD HH:mm:ss").toDate();
+        selector.paymentDate = {$gte: fromDate, $lte: toDate};
+    }
+    if (status != "") {
+        selector.status = status
+    }
+    Session.set('salePaymentSelectorSession', selector);
 }

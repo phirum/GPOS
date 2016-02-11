@@ -1,15 +1,20 @@
-a{
-    cursor:pointer;
+/* CSS declarations go here */
+.auto-fix{
+    white-space: nowrap;
+}
+a {
+    cursor: pointer;
 }
 
-.table img{
+.table img {
     width: 36px;
     height: 36px;
 }
 
-.input-group-addon{
-    cursor:pointer;
+.input-group-addon {
+    cursor: pointer;
 }
+
 /* Sticky footer styles
 -------------------------------------------------- */
 html {
@@ -79,10 +84,12 @@ code {
 #iron-router-progress.spinner:before {
     border-color: #ff6a07;
 }
+
 /* align-center*/
-.align-center{
+.align-center {
     text-align: center;
 }
+
 /* Customize text box like label */
 .la-box {
     border: none;
@@ -91,4 +98,7 @@ code {
     text-align: center;
     width: 150px;
 }
-#pay-format{padding-right: 10px;}
+
+#pay-format {
+    padding-right: 10px;
+}

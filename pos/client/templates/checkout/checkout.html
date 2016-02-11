@@ -1,4 +1,7 @@
+
 <template name="pos_checkout">
+
+
     <div class="row">
         <div class="col-md-3">
             <div class="panel panel-default">
@@ -11,7 +14,7 @@
 
                             <label for="sale-id"> <b>ID:</b></label>
                             <input type="text" id="sale-id" class="form-control input-sm" value="{{sale._id}}" readonly>
-                            <label for="voucher"> <b>Voucher <span style="color:red">*</span></b></label>
+                            <label for="voucher"> <b>Voucher</b></label>
                             <input type="text" id="voucher" value="{{sale.voucher}}" class="form-control input-sm">
                             <label for="sale-date"><b>Date <span style="color:red">*</span></b></label>
 
@@ -30,7 +33,8 @@
                                 {{/each}}
                             </select>-->
                             <input type="text" class="form-control input-sm" value="{{location.name}}" readonly>
-                            <input type="text" id="location-id" class="form-control input-sm hidden" value="{{location._id}}" readonly>
+                            <input type="text" id="location-id" class="form-control input-sm hidden"
+                                   value="{{location._id}}" readonly>
 
 
                             <label for="staff-id"> <b>Staff <span style="color:red">*</span></b></label>
@@ -116,12 +120,16 @@
                                    autofocus>
                         </div>
                         <div class="col-md-5">
-                            <select id="product-id" class="form-control input-sm select-two">
+                           <!-- <select id="product-id" class="form-control input-sm select-two">
                                 <option value="">(Select One)</option>
                                 {{#each products}}
                                     <option value="{{_id}}">{{name}} ({{_unit.name}})</option>
                                 {{/each}}
-                            </select>
+                            </select>-->
+                            <input class="form-control typeahead input-sm" name="search" type="text"
+                                   placeholder="Type your product name" autocomplete="on" spellcheck="off"
+                                   data-source="search" data-select='selected' data-highlight=true
+                                   data-template='repo'  style="width: 315px;"/>
                         </div>
                         <div class="col-md-2">
                             <input type="text" id="default-quantity" class="form-control input-sm"

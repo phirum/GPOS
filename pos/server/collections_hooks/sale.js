@@ -64,7 +64,6 @@ Pos.Collection.SaleDetails.after.update(function (userId, doc, fieldNames, modif
         var saleDate = sale.saleDate;
         checkPromotion(doc, saleDate);
     });
-    console.log(doc._id);
 });
 
 Pos.Collection.Sales.after.update(function (userId, doc, fieldNames, modifier, options) {
@@ -87,7 +86,7 @@ function updateSaleTotal(saleId) {
         var set = {};
         //var discount = Pos.Collection.Sales.findOne(saleId).discountAmount;
         var sale = Pos.Collection.Sales.findOne(saleId);
-        var discount = sale.discount;
+        var discount = sale && sale.discount ? sale.discount : 0;
         var saleSubTotal = 0;
         var saleDetails = Pos.Collection.SaleDetails.find({saleId: saleId});
         saleDetails.forEach(function (saleDetail) {
@@ -158,7 +157,6 @@ function removePromotionProduct(doc) {
             selector.startTime = {$lte: saleTime};
             selector.endTime = {$gte: saleTime};
             var promotionQty = Pos.Collection.PromotionQuantities.findOne(selector);
-            console.log(promotionQty);
             if (promotionQty != null) {
                 promotionQty.promotionItems.forEach(function (pro) {
                     var selector = {
@@ -228,6 +226,7 @@ function checkPromotion(saleDetail, saleDate) {
                         saleDetailObj.productId = pro.productId;
                         saleDetailObj.quantity = promotionQuantity;
                         saleDetailObj.discount = 0;
+                        saleDetailObj.locationId = saleDetail.locationId;
                         //saleDetailObj.discount = 100;
                         saleDetailObj.price = 0;
                         //saleDetailObj.price = isRetail ? product.retailPrice : product.wholesalePrice;

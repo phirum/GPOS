@@ -1,6 +1,7 @@
 Session.setDefault('hasLocationTransferUpdate', false);
 Session.setDefault('fromLocationId', '');
 Template.pos_locationTransfer.onRendered(function () {
+    Meteor.typeahead.inject();
     createNewAlertify(["location", "userStaff"]);
     $('#locationTransfer-date').datetimepicker({
         format: "MM/DD/YYYY hh:mm:ss A"
@@ -19,7 +20,112 @@ Template.pos_locationTransfer.onRendered(function () {
         }
     }, 500);
 });
+function checkBeforeAddOrUpdate(selector, data) {
+    var locationTransferId = $('#locationTransfer-id').val();
+    var branchId = Session.get('currentBranch');
+    var defaultQuantity = $('#default-quantity').val() == "" ? 1 : parseInt($('#default-quantity').val());
+    Meteor.call('findOneRecord', 'Pos.Collection.Products', selector, {}, function (error, product) {
+        if (product) {
+            debugger;
+            if (product.productType == "Stock") {
+                var sd = Pos.Collection.LocationTransferDetails.findOne({
+                    productId: product._id,
+                    branchId: branchId,
+                    LocationTransferId: locationTransferId
+                });
+                if (sd != null) {
+                    defaultQuantity = defaultQuantity + sd.quantity;
+                }
+                //---Open Inventory type block "FIFO Inventory"---
+                Meteor.call('findOneRecord', 'Pos.Collection.FIFOInventory', {
+                    branchId: branchId,
+                    productId: product._id,
+                    locationId: data.fromLocationId
+                }, {sort: {createdAt: -1}}, function (error, inventory) {
+                    if (inventory) {
+                        var remainQuantity = inventory.remainQty - defaultQuantity;
+                        if (remainQuantity < 0) {
+                            alertify.warning('Product is out of stock. Quantity in stock is "' + inventory.remainQty + '".');
+                        }
+                        else {
+                            var unSavedLocationTransferId = Pos.Collection.LocationTransfers.find({
+                                status: "Unsaved",
+                                branchId: Session.get('currentBranch'),
+                                _id: {$ne: locationTransferId}
+                            }).map(function (s) {
+                                return s._id;
+                            });
+                            var otherLocationTransferDetails = Pos.Collection.LocationTransferDetails.find({
+                                locationTransferId: {$in: unSavedLocationTransferId},
+                                productId: product._id
+                            });
+                            var otherQuantity = 0;
+                            if (otherLocationTransferDetails.count() > 0) {
+                                otherLocationTransferDetails.forEach(function (sd) {
+                                    otherQuantity += sd.quantity;
+                                });
+                            }
+                            remainQuantity = remainQuantity - otherQuantity;
+                            if (remainQuantity < 0) {
+                                alertify.warning('Product is out of stock. Quantity in stock is "' +
+                                    inventory.remainQty + '". And quantity on locationTransfer of other seller is "' + otherQuantity + '".');
+                            } else {
+                                addOrUpdateProducts(branchId, locationTransferId, product, data.locationTransferObj);
+                            }
+                        }
+                    }
+                    else {
+                        alertify.warning("Don't have product in stock.");
+                    }
+                });
+                //---End Inventory type block "FIFO Inventory"---
+            }
+            else {
+                alertify.warning('This Product is non-stock type.');
+            }
+
+        }
+        else {
+            alertify.warning("Can't find this Product");
+        }
+    });
+}
 Template.pos_locationTransfer.helpers({
+    search: function (query, sync, callback) {
+        Meteor.call('searchProduct', query, {}, function (err, res) {
+            if (err) {
+                console.log(err);
+                return;
+            }
+            callback(res);
+        });
+    },
+    selected: function (event, suggestion, dataSetName) {
+        debugger;
+        var id = suggestion._id;
+        var data = getValidatedValues();
+        var selector = {_id: id};
+        if (data.valid) {
+            checkBeforeAddOrUpdate(selector, data);
+        } else {
+            alertify.warning(data.message);
+        }
+
+
+        /* var locationTransferId = $('#locationTransfer-id').val();
+         var branchId = Session.get('currentBranch');
+         var data = getValidatedValues('id', id, branchId, locationTransferId);
+         if (data.valid) {
+         addOrUpdateProducts(branchId, locationTransferId, data.product, data.locationTransferObj);
+         } else {
+         alertify.warning(data.message);
+         }
+         $('#product-id').select2('val', '');
+         */
+        $('#product-barcode').val('');
+        $('#product-barcode').focus();
+
+    },
     imeis: function () {
         var locationTransferDetailId = Session.get('locationTransferDetailId');
         if (locationTransferDetailId != null) {
@@ -118,50 +224,49 @@ Template.pos_locationTransfer.events({
     'keyup #input-imei': function (e) {
         if (e.which == 13) {
             var branchId = Session.get('currentBranch');
-            var imei = $(e.currentTarget).val().trim();
+            var element = $(e.currentTarget);
+            var imei = element.val().trim();
             if (imei == "") {
                 return;
             }
             var locationTransferDetailId = Session.get('locationTransferDetailId');
             var locationTransferDetail = Pos.Collection.LocationTransferDetails.findOne(locationTransferDetailId);
-            var inventoryType = 1;
-            var inventory;
-            if (inventoryType == 1) {
-                inventory = Pos.Collection.FIFOInventory.findOne({
-                    branchId: branchId,
-                    productId: locationTransferDetail.productId
-                    //price: pd.price
-                }, {sort: {createdAt: -1}});
-            }
-            if (inventory != null) {
-                if (inventory.imei == null || inventory.imei.indexOf(imei) == -1) {
-                    alertify.warning("Can't find this IMEI.");
-                    return;
+
+            //---Open Inventory type block "FIFO Inventory"---
+            Meteor.call('findOneRecord', 'Pos.Collection.FIFOInventory', {
+                branchId: branchId,
+                productId: locationTransferDetail.productId
+                //price: pd.price
+            }, {sort: {createdAt: -1}}, function (error, inventory) {
+                if (inventory) {
+                    if (inventory.imei == null || inventory.imei.indexOf(imei) == -1) {
+                        alertify.warning("Can't find this IMEI.");
+                    } else {
+                        var obj = {};
+                        var imeis = locationTransferDetail.imei == null ? [] : locationTransferDetail.imei;
+                        if (imeis.indexOf(imei) != -1) {
+                            alertify.warning('IMEI is already exist.');
+                        } else if (locationTransferDetail.imei.count() == locationTransferDetail.quantity) {
+                            alertify.warning("Number of IMEI can't greater than Quantity.");
+                        } else {
+                            imeis.push(imei);
+                            obj.imei = imeis;
+                            Meteor.call('updateLocationTransferDetails', locationTransferDetailId, obj, function (er, re) {
+                                if (er) {
+                                    alertify.error(er.message);
+                                } else {
+                                    element.val('');
+                                    element.focus();
+                                }
+                            });
+                        }
+                    }
                 }
-            } else {
-                alertify.error("Product is out of stock.");
-                return;
-            }
-            var obj = {};
-            var imeis = locationTransferDetail.imei == null ? [] : locationTransferDetail.imei;
-            if (imeis.indexOf(imei) != -1) {
-                alertify.warning('IMEI is already exist.');
-                return;
-            } else if (locationTransferDetail.imei.count() == locationTransferDetail.quantity) {
-                alertify.warning("Number of IMEI can't greater than Quantity.");
-                return;
-            } else {
-                imeis.push(imei);
-            }
-            obj.imei = imeis;
-            Meteor.call('updateLocationTransferDetails', locationTransferDetailId, obj, function (er, re) {
-                if (er) {
-                    alertify.error(er.message);
-                } else {
-                    $(e.currentTarget).val('');
-                    $(e.currentTarget).focus();
+                else {
+                    alertify.error("Product is out of stock.");
                 }
             });
+            //---Open Inventory type block "FIFO Inventory"---
         }
     },
     'click .btn-imei': function () {
@@ -329,7 +434,7 @@ Template.pos_locationTransfer.events({
 
         var val = $(e.currentTarget).val();
         var numericReg = /^\d*[0-9](|.\d*[0-9]|,\d*[0-9])?$/;
-
+        var self = this;
         var firstQuantity = this.quantity;
         var quantity = parseInt($(e.currentTarget).val() == "" ? 0 : $(e.currentTarget).val());
         if (!numericReg.test(val) || quantity <= 0) {
@@ -337,27 +442,12 @@ Template.pos_locationTransfer.events({
             $(e.currentTarget).focus();
             return;
         }
-        if (this.imei.count() > quantity) {
+        if (self.imei.count() > quantity) {
             alertify.warning("Quantity can't be less than number of IMEI.");
             $(e.currentTarget).val(firstQuantity);
             return;
         }
-
-        var locationId = this.fromLocationId;//$('#from-location-id').val();
-        var branchId = Session.get('currentBranch');
-        var ltdId = this._id;
-        var ltId=$('#locationTransfer-id').val();
-        var set = {};
-        set.quantity = quantity;
-        //set.amount = (this.price * quantity) * (1 - this.discount / 100);
-
-        var data = locationTransferStock(this.productId, quantity, branchId, ltId, locationId);
-        if (data.valid) {
-            Meteor.call('updateLocationTransferDetails', ltdId, set);
-        } else {
-            alertify.warning(data.message);
-            $(e.currentTarget).val(firstQuantity);
-        }
+        locationTransferStock(self, firstQuantity, quantity, e);
         // updateLocationTransferSubTotal(FlowRouter.getParam('locationTransferId'));
     },
     'click .btn-remove': function () {
@@ -402,74 +492,87 @@ Template.pos_locationTransfer.events({
         var charCode = e.which;
         if (e.which == 13) {
             var barcode = $('#product-barcode').val();
-            var locationTransferId = $('#locationTransfer-id').val();
-            var branchId = Session.get('currentBranch');
-            var data = getValidatedValues('barcode', barcode, branchId, locationTransferId);
+            var selector = {barcode: barcode, status: "enable"};
+            var data = getValidatedValues();
             if (data.valid) {
-                addOrUpdateProducts(branchId, locationTransferId, data.product, data.locationTransferObj);
+                checkBeforeAddOrUpdate(selector, data);
             } else {
                 alertify.warning(data.message);
             }
-            $('#product-id').select2('val', '');
             $('#product-barcode').val('');
             $('#product-barcode').focus();
         }
     }
 });
-function locationTransferStock(productId, newQty, branchId, locationTransferId, locationId) {
-    var data = {};
-    var product = Pos.Collection.Products.findOne(productId);
-    if (product.productType == "Stock") {
-        //---Open Inventory type block "FIFO Inventory"---
-        var inventory = Pos.Collection.FIFOInventory.findOne({
-            branchId: branchId,
-            productId: productId,
-            locationId: locationId
-            //price: pd.price
-        }, {sort: {createdAt: -1}});
-        if (inventory != null) {
-            var remainQuantity = inventory.remainQty - newQty;
-            if (remainQuantity < 0) {
-                data.valid = false;
-                data.message = 'Product is out of stock. Quantity in stock is "' + inventory.remainQty + '".';
-                return data;
-            }
-            debugger;
-            var unSavedLocationTransferId = Pos.Collection.LocationTransfers.find({
-                status: "Unsaved",
-                branchId: Session.get('currentBranch'),
-                _id: {$ne: locationTransferId}
-            }).map(function (s) {
-                return s._id;
-            });
-            var otherLocationTransferDetails = Pos.Collection.LocationTransferDetails.find({
-                locationTransferId: {$in: unSavedLocationTransferId},
-                productId: product._id
-            });
-            var otherQuantity = 0;
-            if (otherLocationTransferDetails != null) {
-                otherLocationTransferDetails.forEach(function (sd) {
-                    otherQuantity += sd.quantity;
-                });
-            }
-            remainQuantity = remainQuantity - otherQuantity;
-            if (remainQuantity < 0) {
-                data.valid = false;
-                data.message = 'Product is out of stock. Quantity in stock is "' +
-                    inventory.remainQty + '". And quantity on locationTransfer of other seller is "' + otherQuantity + '".';
-                return data;
+function locationTransferStock(self, oldQty, newQty, e) {
+    var productId = self.productId;
+    var locationId = self.fromLocationId;//$('#from-location-id').val();
+    var branchId = Session.get('currentBranch');
+    var locationTransferDetailId = self._id;
+    var locationTransferId = $('#locationTransfer-id').val();
+    Meteor.call('findOneRecord', 'Pos.Collection.Products', {_id: productId}, {}, function (error, product) {
+        if (product) {
+            if (product.productType == "Stock") {
+                //---Open Inventory type block "FIFO Inventory"---
+                Meteor.call('findOneRecord', 'Pos.Collection.FIFOInventory',
+                    {
+                        branchId: branchId,
+                        productId: productId,
+                        locationId: locationId
+                    }, {sort: {createdAt: -1}}, function (error, inventory) {
+                        if (inventory) {
+                            var remainQuantity = inventory.remainQty - newQty;
+                            if (remainQuantity < 0) {
+                                $(e.currentTarget).val(oldQty);
+                                alertify.warning('Product is out of stock. Quantity in stock is "' + inventory.remainQty + '".');
+                            } else {
+                                var unSavedLocationTransferId = Pos.Collection.LocationTransfers.find({
+                                    status: "Unsaved",
+                                    branchId: Session.get('currentBranch'),
+                                    _id: {$ne: locationTransferId}
+                                }).map(function (s) {
+                                    return s._id;
+                                });
+                                var otherLocationTransferDetails = Pos.Collection.LocationTransferDetails.find({
+                                    locationTransferId: {$in: unSavedLocationTransferId},
+                                    productId: product._id
+                                });
+                                var otherQuantity = 0;
+                                if (otherLocationTransferDetails.count() > 0) {
+                                    otherLocationTransferDetails.forEach(function (sd) {
+                                        otherQuantity += sd.quantity;
+                                    });
+                                }
+                                remainQuantity = remainQuantity - otherQuantity;
+                                if (remainQuantity < 0) {
+                                    $(e.currentTarget).val(oldQty);
+                                    alertify.warning('Product is out of stock. Quantity in stock is "' +
+                                        inventory.remainQty + '". And quantity on locationTransfer of other seller is "' + otherQuantity + '".');
+                                } else {
+                                    var set = {};
+                                    set.quantity = newQty;
+                                    Meteor.call('updateLocationTransferDetails', locationTransferDetailId, set);
+                                }
+                            }
+                        } else {
+                            $(e.currentTarget).val(oldQty);
+                            alertify.warning("Don't have product in stock.");
+                        }
+                    });
+
+            } else {
+                $(e.currentTarget).val(oldQty);
+                alertify.warning('This Product is non-stock type.');
             }
         } else {
-            data.valid = false;
-            data.message = "Don't have product in stock.";
-            return data;
+            alertify.warning("Can't find this product.");
+            $(e.currentTarget).val(oldQty);
         }
-    }
-    data.valid = true;
-    data.message = "Product is OK.";
-    return data;
+
+    });
+
 }
-function getValidatedValues(fieldName, val, branchId, locationTransferId) {
+function getValidatedValues() {
     var data = {};
     var locationTransferDate = $('#input-locationTransfer-date').val();
     if (locationTransferDate == '') {
@@ -479,100 +582,33 @@ function getValidatedValues(fieldName, val, branchId, locationTransferId) {
     }
 
     var fromLocationId = $('#from-location-id').val();
-    if (fromLocationId == "") {
+    if (fromLocationId == "" || fromLocationId == null) {
         data.valid = false;
         data.message = "Please select From Location.";
         return data;
     }
     var toLocationId = $('#to-location-id').val();
-    if (toLocationId == "") {
+    if (toLocationId == "" || toLocationId == null) {
         data.valid = false;
         data.message = "Please select To Location.";
         return data;
     }
     var staffId = $('#staff-id').val();
-    if (staffId == '') {
+    if (staffId == '' || staffId == null) {
         data.valid = false;
         data.message = "Please select staff name.";
         return data;
     }
-    var product;
-    if (fieldName == 'id') {
-        product = Pos.Collection.Products.findOne(val);
-    } else {
-        product = Pos.Collection.Products.findOne({barcode: val, status: "enable"});
-    }
-    if (product != null) {
-        var defaultQuantity = $('#default-quantity').val() == "" ? 1 : parseInt($('#default-quantity').val());
-        if (product.productType == "Stock") {
-            var sd = Pos.Collection.LocationTransferDetails.findOne({
-                productId: product._id,
-                branchId: branchId,
-                LocationTransferId: locationTransferId
-            });
-            if (sd != null) {
-                defaultQuantity = defaultQuantity + sd.quantity;
-            }
-            //---Open Inventory type block "FIFO Inventory"---
-            var inventory = Pos.Collection.FIFOInventory.findOne({
-                branchId: branchId,
-                productId: product._id,
-                locationId: fromLocationId
-                //price: pd.price
-            }, {sort: {createdAt: -1}});
-            //---End Inventory type block "FIFO Inventory"---
-            if (inventory != null) {
-                var remainQuantity = inventory.remainQty - defaultQuantity;
-                if (remainQuantity < 0) {
-                    data.valid = false;
-                    data.message = 'Product is out of stock. Quantity in stock is "' + inventory.remainQty + '".';
-                    return data;
-                }
-                var unSavedLocationTransferId = Pos.Collection.LocationTransfers.find({
-                    status: "Unsaved",
-                    branchId: Session.get('currentBranch'),
-                    _id: {$ne: locationTransferId}
-                }).map(function (s) {
-                    return s._id;
-                });
-                var otherLocationTransferDetails = Pos.Collection.LocationTransferDetails.find({
-                    locationTransferId: {$in: unSavedLocationTransferId},
-                    productId: product._id
-                });
-                var otherQuantity = 0;
-                if (otherLocationTransferDetails != null) {
-                    otherLocationTransferDetails.forEach(function (sd) {
-                        otherQuantity += sd.quantity;
-                    });
-                }
-                remainQuantity = remainQuantity - otherQuantity;
-                if (remainQuantity < 0) {
-                    data.valid = false;
-                    data.message = 'Product is out of stock. Quantity in stock is "' +
-                        inventory.remainQty + '". And quantity on locationTransfer of other seller is "' + otherQuantity + '".';
-                    return data;
-                }
-            } else {
-                data.valid = false;
-                data.message = "Don't have product in stock.";
-                return data;
-            }
-        }
 
-    } else {
-        data.valid = false;
-        data.message = "Can't find this Product";
-        return data;
-    }
     data.message = "Add product to list is successfully.";
     data.valid = true;
     data.locationTransferObj = {
-        locationTransferDate: moment(locationTransferDate).toDate(),
+        locationTransferDate: moment(locationTransferDate,'MM/DD/YYYY hh:mm:ss a').toDate(),
         staffId: staffId,
         fromLocationId: fromLocationId,
         toLocationId: toLocationId
     };
-    data.product = product;
+    //data.product = product;
     return data;
 }
 function addOrUpdateProducts(branchId, locationTransferId, product, locationTransferObj) {
@@ -588,6 +624,7 @@ function addOrUpdateProducts(branchId, locationTransferId, product, locationTran
         locationTransferDetailObj.fromLocationId = locationTransferObj.fromLocationId;
         locationTransferDetailObj.toLocationId = locationTransferObj.toLocationId;
         locationTransferDetailObj.imei = [];
+        locationTransferDetailObj.status="Unsaved";
         Meteor.call('insertLocationTransferAndLocationTransferDetail', locationTransferObj, locationTransferDetailObj, function (e, r) {
             $('#product-barcode').focus();
             if (e) {
@@ -615,6 +652,7 @@ function addOrUpdateProducts(branchId, locationTransferId, product, locationTran
             locationTransferDetailObj.fromLocationId = locationTransferObj.fromLocationId;
             locationTransferDetailObj.toLocationId = locationTransferObj.toLocationId;
             locationTransferDetailObj.imei = [];
+            locationTransferDetailObj.status="Unsaved";
             Meteor.call('insertLocationTransferDetails', locationTransferDetailObj);
         } else {
             var set = {};

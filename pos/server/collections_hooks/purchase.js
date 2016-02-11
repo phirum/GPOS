@@ -8,18 +8,18 @@ Pos.Collection.PurchaseDetails.after.remove(function (userId, doc) {
     }
 });
 Pos.Collection.Purchases.before.update(function (userId, doc, fieldNames, modifier, options) {
-    Meteor.defer(function () {
+
         if (modifier.$set.locationId != null && modifier.$set.locationId != doc.locationId) {
             Pos.Collection.PurchaseDetails.update(
                 {purchaseId: doc._id},
                 {$set: {locationId: modifier.$set.locationId}},
                 {multi: true});
         }
-    });
+
 });
-Pos.Collection.Purchases.after.update(function (userId, doc, fieldNames, modifier, options) {
+/*Pos.Collection.Purchases.after.update(function (userId, doc, fieldNames, modifier, options) {
     updatePurchaseTotal(doc._id);
-});
+});*/
 
 Pos.Collection.PurchaseDetails.after.insert(function (userId, doc) {
     updatePurchaseTotal(doc.purchaseId);
@@ -37,14 +37,18 @@ Pos.Collection.Purchases.after.remove(function (userId, doc) {
 
 function updatePurchaseTotal(purchaseId) {
     Meteor.defer(function () {
+        Meteor._sleepForMs(1000);
         //var discount = Pos.Collection.Purchases.findOne(purchaseId).discountAmount;
-        var discount = Pos.Collection.Purchases.findOne(purchaseId).discount;
+        var purchase = Pos.Collection.Purchases.findOne(purchaseId);
+        var discount = purchase && purchase.discount ? purchase.discount : 0;
         var purchaseSubTotal = 0;
         var purchaseDetails = Pos.Collection.PurchaseDetails.find({purchaseId: purchaseId});
         purchaseDetails.forEach(function (purchaseDetail) {
             purchaseSubTotal += parseFloat(purchaseDetail.amount);
         });
         var baseCurrencyId = Cpanel.Collection.Setting.findOne().baseCurrency;
+        /*var Setting = Cpanel.Collection.Setting.findOne();
+         var baseCurrencyId = Setting && Setting.baseCurrency ? Setting.baseCurrency : 0;*/
         //var total = purchaseSubTotal - discount;
         var total = purchaseSubTotal * (1 - discount / 100);
         if (baseCurrencyId == "KHR") {
